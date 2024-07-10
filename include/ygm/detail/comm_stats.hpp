@@ -58,7 +58,6 @@ class comm_stats {
   comm_stats() : fd(-1), stats_path(""), stats(nullptr) {}
 
   comm_stats(int rank) {
-    std::cout << "HI" << std::endl;
     stats_path = "trace" + std::to_string(rank);
     fd         = shm_open(stats_path.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0600);
     if (fd == -1) {
