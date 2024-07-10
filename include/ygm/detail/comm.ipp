@@ -58,6 +58,10 @@ inline void comm::comm_setup(MPI_Comm c) {
     std::shared_ptr<std::byte[]> recv_buffer{new std::byte[config.irecv_size]};
     post_new_irecv(recv_buffer);
   }
+
+
+  stats = detail::comm_stats(rank());
+
 }
 
 inline void comm::welcome(std::ostream &os) {
