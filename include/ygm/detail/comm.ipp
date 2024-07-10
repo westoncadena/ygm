@@ -59,9 +59,7 @@ inline void comm::comm_setup(MPI_Comm c) {
     post_new_irecv(recv_buffer);
   }
 
-
   stats = detail::comm_stats(rank());
-
 }
 
 inline void comm::welcome(std::ostream &os) {
