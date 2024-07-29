@@ -59,7 +59,18 @@ inline void comm::comm_setup(MPI_Comm c) {
     post_new_irecv(recv_buffer);
   }
 
-  stats = detail::comm_stats(rank());
+  stats_setup();
+}
+
+inline void comm::stats_setup(){
+  stats.setup(rank());
+  std::vector<int> local_ranks = m_layout.local_ranks();
+
+  if(local_ranks[0] == rank()){
+      int local_ranks_size = local_ranks.size();
+
+      stats.shm_local_ranks(local_ranks_size, local_ranks);
+  }
 }
 
 inline void comm::welcome(std::ostream &os) {
@@ -233,6 +244,7 @@ inline MPI_Comm comm::get_mpi_comm() const { return m_comm_other; }
  *
  */
 inline void comm::barrier() {
+  stats.barrier();
   flush_all_local_and_process_incoming();
   std::pair<uint64_t, uint64_t> previous_counts{1, 2};
   std::pair<uint64_t, uint64_t> current_counts{3, 4};

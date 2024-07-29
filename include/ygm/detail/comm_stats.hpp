@@ -21,6 +21,7 @@ struct shared_stats {
   size_t m_rank;
 
   size_t m_async_count;
+  size_t m_barrier_count;
   size_t m_rpc_count;
   size_t m_route_count;
 
@@ -55,10 +56,33 @@ class comm_stats {
     double  m_start_time;
   };
 
-  comm_stats() : fd(-1), stats_path(""), stats(nullptr) {}
+  comm_stats()
+      : fd(-1), stats_path(""), stats(nullptr), m_time_start(MPI_Wtime()) {}
 
-  comm_stats(int rank) {
-    stats_path = "trace" + std::to_string(rank);
+  ~comm_stats() {
+    if (stats != nullptr) {
+      if (munmap(stats, sizeof(struct shared_stats)) == -1) {
+        std::perror("munmap failed");
+      }
+    }
+
+    if (fd != -1) {
+      if (close(fd) == -1) {
+        std::perror("close failed");
+      }
+
+      int result = shm_unlink(stats_path.c_str());
+      if (result == -1) {
+        std::perror("failed to unlink stats shared memory");
+      }
+    }
+
+    shm_unlink(local_ranks_size_path.c_str());
+    shm_unlink(local_ranks_path.c_str());
+  }
+
+  void setup(int rank) {
+    stats_path = "stats" + std::to_string(rank);
     fd         = shm_open(stats_path.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0600);
     if (fd == -1) {
       std::cerr << "Stats_path = " << stats_path << " File Discriptor = " << fd
@@ -76,15 +100,52 @@ class comm_stats {
     if (stats == MAP_FAILED) std::cerr << "Failed to mmap" << std::endl;
 
     reset();
-    stats->m_rank = rank;
+    stats->m_rank       = rank;
+    stats->m_time_start = m_time_start;
   }
 
-  ~comm_stats() {
-    int result = shm_unlink(stats_path.c_str());
-    // if (result == -1) {
-    //   std::cerr << "Failed to unlink shared memory object: " << stats_path
-    //             << ", result = " << result << std::endl;
-    // }
+  void shm_local_ranks(int size, std::vector<int>& local_ranks) {
+    int fd_size = shm_open(local_ranks_size_path.c_str(),
+                           O_CREAT | O_TRUNC | O_RDWR, 0600);
+    if (fd_size == -1) {
+      std::cerr << "local_ranks_size_path = " << local_ranks_size_path
+                << " File Discriptor = " << fd_size << std::endl;
+    }
+
+    if (ftruncate(fd_size, sizeof(int)) == -1)
+      std::cerr << "Failed to ftruncate shared memory" << std::endl;
+
+    int* shm_size = static_cast<int*>(mmap(
+        NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd_size, 0));
+    if (shm_size == MAP_FAILED) std::cerr << "Failed to mmap" << std::endl;
+
+    *shm_size = size;
+
+    // put the array in memory
+    int fd_arr =
+        shm_open(local_ranks_path.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0600);
+    if (fd_arr == -1) {
+      std::cerr << "local_ranks_path = " << local_ranks_path
+                << " File Discriptor = " << fd_arr << std::endl;
+    }
+
+    if (ftruncate(fd_arr, size * sizeof(int)) == -1)
+      std::cerr << "Failed to ftruncate shared memory" << std::endl;
+
+    int* shm_arr =
+        static_cast<int*>(mmap(NULL, size * sizeof(int), PROT_READ | PROT_WRITE,
+                               MAP_SHARED, fd_arr, 0));
+    if (shm_arr == MAP_FAILED) std::cerr << "Failed to mmap" << std::endl;
+
+    std::copy(local_ranks.begin(), local_ranks.end(), shm_arr);
+
+    if (close(fd_size) == -1) {
+      std::perror("close failed");
+    }
+
+    if (close(fd_arr) == -1) {
+      std::perror("close failed");
+    }
   }
 
   void isend(int dest, size_t bytes) {
@@ -98,6 +159,8 @@ class comm_stats {
   }
 
   void async(int dest) { stats->m_async_count += 1; }
+
+  void barrier() { stats->m_barrier_count += 1; }
 
   void rpc_execute() { stats->m_rpc_count += 1; }
 
@@ -122,6 +185,7 @@ class comm_stats {
   void reset() {
     stats->m_rank                       = -1;
     stats->m_async_count                = 0;
+    stats->m_barrier_count              = 0;
     stats->m_rpc_count                  = 0;
     stats->m_route_count                = 0;
     stats->m_isend_count                = 0;
@@ -171,6 +235,11 @@ class comm_stats {
   int                  fd;
   std::string          stats_path;
   struct shared_stats* stats;
+
+  double m_time_start;
+
+  std::string local_ranks_size_path = "local_ranks_size";
+  std::string local_ranks_path      = "local_ranks";
 };
 }  // namespace detail
 }  // namespace ygm

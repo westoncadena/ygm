@@ -160,6 +160,8 @@ class comm {
  private:
   void comm_setup(MPI_Comm comm);
 
+  void stats_setup();
+
   size_t pack_header(std::vector<std::byte> &packed, const int dest,
                      size_t size);
 

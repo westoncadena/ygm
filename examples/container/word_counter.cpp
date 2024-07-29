@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
   std::string word;
 
   ygm::container::counting_set<std::string> word_counter(world);
-
+  sleep(10);
   // pragma parallel
   while (iss >> word) {
     word_counter.async_insert(word);
@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
   for (auto &word_count : counts) {
     std::cout << word_count.first << " -> " << word_count.second << std::endl;
   }
+  sleep(10);
 
   return 0;
 }

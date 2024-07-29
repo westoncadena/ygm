@@ -25,6 +25,6 @@ int main(int argc, char** argv) {
   if (world.rank() == 0 && world.size() > 1) {
     world.async(1, howdy(), world.rank(), std::string("Can you hear me now?"));
   }
-
+  sleep(40);
   return 0;
 }
